@@ -1,0 +1,250 @@
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.8.0/Chart.bundle.min.js"></script>
+
+<style>
+
+#drop-area {
+    border: 2px dashed #ccc;
+    border-radius: 20px;
+    width: 480px;
+    font-family: sans-serif;
+    margin: 10px auto;
+    padding: 20px;
+}
+#drop-area.highlight {
+    border-color: #333;
+}
+
+</style>
+
+<div id="drop-area">
+<form action="" method="post" enctype="multipart/form-data">
+    <p>Select file to upload:</p>
+    <input type="file" name="fileToUpload" id="fileToUpload">
+    <input type="submit" value="Upload" name="submit">
+</form>
+</div>
+
+<script>
+
+let dropArea = document.getElementById('drop-area');
+
+;['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+  dropArea.addEventListener(eventName, preventDefaults, false)
+})
+
+function preventDefaults (e) {
+  e.preventDefault()
+  e.stopPropagation()
+}
+
+;['dragenter', 'dragover'].forEach(eventName => {
+  dropArea.addEventListener(eventName, highlight, false);
+})
+
+;['dragleave', 'drop'].forEach(eventName => {
+  dropArea.addEventListener(eventName, unhighlight, false);
+})
+
+function highlight(e) {
+  dropArea.classList.add('highlight');
+}
+
+function unhighlight(e) {
+  dropArea.classList.remove('highlight');
+}
+
+dropArea.addEventListener('drop', handleDrop, false);
+
+function handleDrop(e) {
+  let dt = e.dataTransfer;
+  let files = dt.files;
+
+  handleFiles(files);
+}
+
+function handleFiles(files) {
+  ([...files]).forEach(uploadFile);
+}
+
+function uploadFile(file) {
+
+    if (!file) {
+        return;
+    }
+
+    getAsText(file);
+
+}
+
+function getAsText(fileToRead) {
+    var reader = new FileReader();
+    // Read file into memory as UTF-8
+    reader.readAsText(fileToRead);
+    // Handle errors load
+    reader.onload = loadHandler;
+    reader.onerror = errorHandler;
+}
+
+function loadHandler(event) {
+    var csv = event.target.result;
+    drawChart(csv);
+}
+
+function errorHandler(evt) {
+    if(evt.target.error.name == "NotReadableError") {
+        alert("Cannot read file!");
+    }
+}
+
+document.querySelector('form').onsubmit = function(e) {
+    e.preventDefault();
+
+    var fileElement = document.getElementById('fileToUpload');
+    var file = fileElement.files[0];
+
+    uploadFile(file);
+}
+
+</script>
+
+<div id="charts">
+    <canvas id="myChart" width="400" height="200"></canvas>
+</div>
+
+<script>
+
+var myChart = null;
+
+function processData(allText) {
+    var allTextLines = allText.split(/\r\n|\n/);
+
+    var lines = [];
+
+    var currentDate = 0;
+
+    for (var i = 1; i < allTextLines.length; i++) {
+        var data = allTextLines[i].split(',');
+
+        if (data[0] == '') {
+            continue;
+        }
+
+        if (currentDate == 0) {
+            currentDate = data[0];
+        }
+
+        if (data[0] - currentDate > 100000000) {
+            continue;
+        }
+
+        currentDate = data[0];
+
+        var date = new Date(parseInt(data[0]));
+        data[0] = date.toString('MM/dd/yy HH:mm:ss');;
+
+        lines.push(data);
+    }
+    return lines;
+}
+
+function drawChart(csvData) {
+
+    var rawData = processData(csvData);
+    var currentMaxLength = 0;
+
+
+    var finalData = [];
+
+    for (var i = 0; i < 20; i++) {
+        finalData.push([]);
+    }
+
+
+    for (var row = 0; row < rawData.length; row++) {
+        var x = rawData[row][0];
+
+        var rowLength = rawData[row].length;
+
+        if (rowLength > currentMaxLength) {
+            currentMaxLength = rowLength;
+            finalData.push([]);
+        }
+
+        for (var i = 5; i < rowLength; i++) {
+            finalData[i - 5].push({"x": x, "y": rawData[row][i]});
+        }
+
+    }
+
+    var colours = [
+        'rgba(255, 0, 0, 1)',
+        'rgba(0, 255, 0, 1)',
+        'rgba(0, 0, 255, 1)',
+        'rgba(255, 255, 0, 1)',
+        'rgba(255, 0, 255, 1)',
+        'rgba(0, 255, 255, 1)',
+    ];
+
+    var dataSets = [];
+
+    for (var i = 5; i < currentMaxLength; i++) {
+        dataSets[i - 5] = {
+            data: finalData[i - 5],
+            label: 'Paragraph ' + (i - 4),
+            backgroundColor: colours[i - 5],
+            borderColor: colours[i - 5],
+        };
+    }
+
+    var options = {
+            title: {
+                display: true,
+                text: ''
+            },
+            scales: {
+                xAxes: [{
+                    type: 'time',
+                    time: {
+                        unit: 'second'
+                    },
+                    ticks: {
+                        autoSkip: true,
+                        maxTicksLimit: 25
+                    }
+                }]
+            }
+        }
+
+    var ctx = document.getElementById('myChart').getContext('2d');
+    ctx.clearRect(0, 0, document.getElementById('myChart').width, document.getElementById('myChart').height);
+
+    if (myChart != null){
+        myChart.destroy();
+    }
+
+    myChart = new Chart(ctx, {
+
+        type: 'scatter',
+        
+        data: {
+            datasets: dataSets
+        },
+        options: options
+    });
+
+}
+
+function createCanvas(id) {
+
+    var canvas = document.createElement('canvas');
+
+    canvas.id = id;
+    canvas.width = 800;
+    canvas.height = 400;
+
+    return canvas;
+}
+
+
+
+</script>
